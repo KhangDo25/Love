@@ -1,0 +1,6 @@
+{
+  "name": "GAME CỦA 2 CHÚNG MÌNH 💕",
+  "description": "Web app dành riêng cho 2 người yêu nhau kết nối chơi game realtime p2p, bói tình yêu, chế độ ngọt ngào & cà khịa, sổ tay đôi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
