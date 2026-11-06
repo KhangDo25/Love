@@ -1,14 +1,19 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      global: 'globalThis',
+    },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve('.'),
+        'mqtt/dist/mqtt.min.js': path.resolve('node_modules/mqtt/dist/mqtt.esm.js'),
+        buffer: 'buffer/',
       },
     },
     server: {

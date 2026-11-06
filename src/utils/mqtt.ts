@@ -1,4 +1,6 @@
-import mqtt, { MqttClient } from 'mqtt';
+import mqtt from 'mqtt/dist/mqtt.min.js';
+import type { MqttClient } from 'mqtt';
+import { Buffer } from 'buffer';
 import { P2PMessage, UserProfile, CoupleGameState } from '../types/game';
 
 export type ConnectionStatus =
@@ -146,7 +148,7 @@ export class MQTTManager {
         }
       });
 
-      client.once('error', (err) => {
+      client.once('error', (err: any) => {
         if (!settled) {
           settled = true;
           clearTimeout(timeoutId);
