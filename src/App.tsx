@@ -28,7 +28,7 @@ import {
   getDefaultGameState,
   mergeGameStates,
 } from './utils/storage';
-import { P2PManager } from './utils/webrtc';
+import { P2PManager, ConnectionStatus } from './utils/webrtc';
 import { Header } from './components/Header';
 import { Lobby } from './components/Lobby';
 import { MainDashboard } from './components/MainDashboard';
@@ -49,11 +49,8 @@ export default function App() {
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
 
   // Connection State
-  const [connectionStatus, setConnectionStatus] = useState<
-    'disconnected' | 'connecting' | 'reconnecting' | 'connected'
-  >('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isWaitingHost, setIsWaitingHost] = useState(false);
   const [waitingCode, setWaitingCode] = useState('');
   const [currentRoomCode, setCurrentRoomCode] = useState<string | null>(null);
   const [lastRoomCode, setLastRoomCode] = useState<string | null>(() => getLastRoomCode());
@@ -407,75 +404,69 @@ export default function App() {
   useEffect(() => {
     p2pRef.current = new P2PManager({
       onStatusChange: (status) => {
+        console.log('[App] P2P status change:', status);
         setConnectionStatus(status);
         if (status === 'connected') {
-          setIsWaitingHost(false);
           setErrorMessage(null);
-          confetti({
-            particleCount: 60,
-            spread: 70,
-            origin: { y: 0.5 },
-          });
-
-          // Sync initial state and profile
-          const isHost = p2pRef.current?.getIsHost() || false;
-          const myProf = myProfileRef.current;
-
-          p2pRef.current?.send({
-            type: 'UPDATE_PROFILE',
-            payload: {
-              role: isHost ? 'host' : 'guest',
-              profile: myProf,
-            },
-          });
-
-          if (isHost) {
-            // Host sends authoritative full state
-            p2pRef.current?.send({
-              type: 'SYNC_FULL_STATE',
-              payload: {
-                ...gameStateRef.current,
-                hostProfile: myProf,
-              },
-            });
-          }
         }
+      },
+      onRoomCreated: (code) => {
+        console.log('[App] Room created with code:', code);
+        setWaitingCode(code);
+      },
+      onHandshakeComplete: (partnerProf, isHost, incomingState) => {
+        console.log('[App] Handshake complete! isHost:', isHost, 'Partner:', partnerProf.name);
+        setPartnerProfile(partnerProf);
+        const room = p2pRef.current?.getRoomCode() || '';
+        setCurrentRoomCode(room);
+        saveLastRoomCode(room);
+        setLastRoomCode(room);
+        setErrorMessage(null);
+
+        if (incomingState) {
+          const merged = mergeGameStates(gameStateRef.current, incomingState);
+          setGameState(merged);
+          saveGameState(merged);
+        } else {
+          setGameState((prev) => {
+            const next = {
+              ...prev,
+              roomCode: room,
+              guestProfile: partnerProf,
+              hostProfile: myProfileRef.current,
+            };
+            saveGameState(next);
+            return next;
+          });
+        }
+
+        confetti({
+          particleCount: 70,
+          spread: 75,
+          origin: { y: 0.5 },
+        });
+      },
+      onPartnerDisconnected: () => {
+        console.warn('[App] Partner disconnected! Attempting reconnect...');
       },
       onMessage: handleP2PMessage,
       onError: (err) => {
+        console.error('[App] P2P Error:', err);
         setErrorMessage(err);
       },
-      onRoomCreated: (code) => {
-        setWaitingCode(code);
-        setCurrentRoomCode(code);
-        saveLastRoomCode(code);
-        setIsWaitingHost(true);
-      },
+      getCurrentState: () => gameStateRef.current,
+      getMyProfile: () => myProfileRef.current,
     });
 
     // Check for room in URL parameter ?room=1234
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam && roomParam.length === 4) {
-      // Auto-join room from URL invite link!
-      setCurrentRoomCode(roomParam);
-      p2pRef.current.joinRoom(roomParam);
+      console.log('[App] Auto-joining room from URL query param:', roomParam);
+      p2pRef.current.joinRoom(roomParam, myProfileRef.current);
     }
 
-    // Auto-reconnect listeners on mobile visibility change and online status
-    const handleVisibilityChange = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        currentRoomCode &&
-        !p2pRef.current?.isConnected()
-      ) {
-        console.log('App resumed, checking connection...');
-      }
-    };
-
-    window.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
       p2pRef.current?.disconnect();
     };
   }, [handleP2PMessage]);
@@ -487,26 +478,27 @@ export default function App() {
     p2pRef.current.createRoom();
   };
 
-  // Guest joins room
+  // Guest joins room (only moves to room once handshake completes!)
   const handleJoinRoom = (code: string) => {
     if (!p2pRef.current) return;
     setErrorMessage(null);
-    setCurrentRoomCode(code);
-    saveLastRoomCode(code);
-    p2pRef.current.joinRoom(code);
+    p2pRef.current.joinRoom(code, myProfileRef.current);
   };
 
-  // Cancel waiting room
+  // Cancel waiting room / join attempt
   const handleCancelWait = () => {
     p2pRef.current?.disconnect();
-    setIsWaitingHost(false);
+    setWaitingCode('');
     setCurrentRoomCode(null);
+    setErrorMessage(null);
   };
 
   // Leave room
   const handleLeaveRoom = () => {
     p2pRef.current?.disconnect();
     setCurrentRoomCode(null);
+    setWaitingCode('');
+    setErrorMessage(null);
     setActiveView('main');
   };
 
@@ -893,19 +885,19 @@ export default function App() {
     });
   };
 
-  // If not currently in a room or waiting in lobby
-  const isInRoom = currentRoomCode && !isWaitingHost;
+  // isInRoom is true ONLY when DataConnection is open and handshake completed!
+  const isInRoom = connectionStatus === 'connected' || connectionStatus === 'reconnecting';
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-rose-50 via-pink-50 to-purple-50 flex flex-col font-sans relative overflow-x-hidden">
       {/* Floating ambient particles */}
       <FloatingHearts />
 
-      {/* Header bar (when inside room or waiting) */}
+      {/* Header bar (when inside room) */}
       {isInRoom && (
         <Header
           connectionStatus={connectionStatus}
-          roomCode={currentRoomCode}
+          roomCode={currentRoomCode || ''}
           lovePoints={gameState.lovePoints || 200}
           anniversaryDate={myProfile.anniversaryDate}
           onOpenFortune={() => setShowFortuneModal(true)}
@@ -918,7 +910,6 @@ export default function App() {
       <main className="flex-1 flex flex-col z-10">
         {!isInRoom ? (
           <Lobby
-            isWaitingHost={isWaitingHost}
             waitingCode={waitingCode}
             lastRoomCode={lastRoomCode}
             connectionStatus={connectionStatus}

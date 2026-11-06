@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Copy, Check, Users, Sparkles, HeartHandshake, AlertCircle, RefreshCw } from 'lucide-react';
+import { Copy, Check, Sparkles, HeartHandshake, AlertCircle, RefreshCw, Loader2, ArrowLeft } from 'lucide-react';
 import { UserProfile } from '../types/game';
+import { ConnectionStatus } from '../utils/webrtc';
 
 interface LobbyProps {
-  isWaitingHost: boolean;
   waitingCode: string;
   lastRoomCode: string | null;
-  connectionStatus: 'disconnected' | 'connecting' | 'reconnecting' | 'connected';
+  connectionStatus: ConnectionStatus;
   errorMessage: string | null;
   myProfile: UserProfile;
   onCreateRoom: () => void;
@@ -16,7 +16,6 @@ interface LobbyProps {
 }
 
 export const Lobby: React.FC<LobbyProps> = ({
-  isWaitingHost,
   waitingCode,
   lastRoomCode,
   connectionStatus,
@@ -47,11 +46,40 @@ export const Lobby: React.FC<LobbyProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  // If host is waiting for partner
-  if (isWaitingHost) {
+  // 1. HOST: Đang tạo phòng (chờ peer.on('open'))
+  if (connectionStatus === 'creating_room') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto w-full">
-        <div className="bg-white/90 backdrop-blur-md rounded-3xl p-8 shadow-xl border-2 border-pink-200 w-full space-y-6">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 shadow-xl border-2 border-pink-200 w-full space-y-5 animate-in zoom-in-95">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-pink-100 text-pink-500 shadow-inner">
+            <Loader2 className="w-10 h-10 animate-spin text-pink-500" />
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+              Đang tạo phòng... 💕
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Đang đăng ký mã phòng với máy chủ PeerJS...
+            </p>
+          </div>
+
+          <button
+            onClick={onCancelWait}
+            className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition active:scale-95 text-xs"
+          >
+            HỦY
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. HOST: Đã tạo xong phòng, CHỈ hiện mã phòng và màn chờ sau khi peer.on('open')
+  if (connectionStatus === 'waiting_guest') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto w-full">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 shadow-xl border-2 border-pink-200 w-full space-y-6 animate-in zoom-in-95">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-rose-100 text-rose-500 animate-pulse-subtle shadow-inner">
             <HeartHandshake className="w-10 h-10" />
           </div>
@@ -105,20 +133,49 @@ export const Lobby: React.FC<LobbyProps> = ({
             </button>
           </div>
 
-          <div className="text-xs text-slate-400">
-            {connectionStatus === 'connecting' && (
-              <span className="inline-flex items-center gap-1.5 text-pink-500 font-semibold animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-pink-500"></span>
-                Tín hiệu sẵn sàng, đang mở cửa đón người yêu...
-              </span>
-            )}
+          <div className="text-xs text-pink-500 font-semibold flex items-center justify-center gap-1.5 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-pink-500"></span>
+            <span>Tín hiệu sẵn sàng, khi người yêu vào sẽ tự động mở màn hình!</span>
           </div>
         </div>
       </div>
     );
   }
 
-  // Lobby Home view
+  // 3. GUEST: Đang tìm phòng (chờ conn.on('open') và host welcome)
+  if (connectionStatus === 'joining_room') {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto w-full">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 shadow-xl border-2 border-pink-200 w-full space-y-5 animate-in zoom-in-95">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-rose-100 text-rose-500 shadow-inner">
+            <RefreshCw className="w-10 h-10 animate-spin text-rose-500" />
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">
+              Đang tìm phòng... 🔑
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              Đang kết nối tới điện thoại người yêu qua WebRTC...
+            </p>
+          </div>
+
+          <div className="p-3 bg-pink-50 rounded-2xl border border-pink-200 text-xs text-pink-700 font-semibold">
+            Vui lòng giữ màn hình sáng trong vài giây nhé!
+          </div>
+
+          <button
+            onClick={onCancelWait}
+            className="w-full py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition active:scale-95 text-xs"
+          >
+            HỦY KẾT NỐI
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. LOBBY HOME: Chưa vào phòng, ở lại màn nhập mã
   return (
     <div className="flex-1 flex flex-col justify-center items-center p-4 max-w-md mx-auto w-full z-10">
       <div className="bg-white/90 backdrop-blur-md rounded-3xl p-6 shadow-2xl border-2 border-pink-200 w-full space-y-6">
@@ -171,19 +228,11 @@ export const Lobby: React.FC<LobbyProps> = ({
           </span>
         </div>
 
-        {/* Error message */}
+        {/* Error message (staying on Lobby screen) */}
         {errorMessage && (
-          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2">
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2 animate-in fade-in">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
             <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Connection status indicator */}
-        {connectionStatus === 'connecting' && (
-          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 animate-pulse">
-            <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
-            <span>Đang thiết lập kết nối tới người yêu...</span>
           </div>
         )}
 
@@ -248,8 +297,9 @@ export const Lobby: React.FC<LobbyProps> = ({
           {showNetworkTip && (
             <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 text-left space-y-1">
               <p className="font-bold text-slate-700">Lưu ý khi chơi qua mạng khác nhau:</p>
-              <p>• WebRTC kết nối ngang hàng P2P giữa 2 máy.</p>
-              <p>• Một số mạng 4G hoặc WiFi công ty có tường lửa chặn P2P. Nếu bị kẹt ở bước "Đang kết nối", hãy thử đổi cả 2 sang 4G hoặc cùng bắt 1 mạng WiFi nhé!</p>
+              <p>• WebRTC kết nối ngang hàng P2P trực tiếp giữa 2 máy.</p>
+              <p>• Hệ thống đã tích hợp STUN/TURN dự phòng để xuyên tường lửa 4G.</p>
+              <p>• Nếu mạng 4G/WiFi vẫn chặn, hãy thử đổi cả 2 sang 4G hoặc cùng bắt 1 mạng WiFi nhé!</p>
             </div>
           )}
         </div>

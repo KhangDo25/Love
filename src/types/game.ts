@@ -125,8 +125,9 @@ export interface CoupleGameState {
   lastUpdated: number;
 }
 
-// PeerJS data message protocol
 export type P2PMessage =
+  | { type: 'HELLO'; payload: { profile: UserProfile } }
+  | { type: 'WELCOME'; payload: { hostProfile: UserProfile; state: CoupleGameState } }
   | { type: 'SYNC_FULL_STATE'; payload: CoupleGameState }
   | { type: 'UPDATE_PROFILE'; payload: { role: 'host' | 'guest'; profile: UserProfile } }
   | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }

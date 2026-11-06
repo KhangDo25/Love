@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { Heart, Sparkles, User, LogOut, Flame } from 'lucide-react';
+import { ConnectionStatus } from '../utils/webrtc';
 
 interface HeaderProps {
-  connectionStatus: 'disconnected' | 'connecting' | 'reconnecting' | 'connected';
+  connectionStatus: ConnectionStatus;
   roomCode: string;
   lovePoints: number;
   anniversaryDate: string;

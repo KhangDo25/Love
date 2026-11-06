@@ -1,11 +1,12 @@
 import React, { useMemo } from 'react';
 import { Heart, Sparkles, Flame, BookOpen, Users, Wand2, MessageCircle } from 'lucide-react';
 import { UserProfile } from '../types/game';
+import { ConnectionStatus } from '../utils/webrtc';
 
 interface MainDashboardProps {
   myProfile: UserProfile;
   partnerProfile: UserProfile | null;
-  connectionStatus: 'disconnected' | 'connecting' | 'reconnecting' | 'connected';
+  connectionStatus: ConnectionStatus;
   lovePoints: number;
   onOpenSweetMode: () => void;
   onOpenBanterMode: () => void;
@@ -71,7 +72,7 @@ export const MainDashboard: React.FC<MainDashboardProps> = ({
       {connectionStatus === 'reconnecting' && (
         <div className="p-3 bg-amber-500 text-white rounded-2xl text-xs font-black flex items-center justify-center gap-2 shadow-md animate-pulse">
           <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping"></span>
-          <span>Đang kết nối lại tới điện thoại người yêu... 💕</span>
+          <span>Người yêu đã mất kết nối. Đang thử nối lại... 🟡</span>
         </div>
       )}
 
