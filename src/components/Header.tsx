@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Heart, Sparkles, User, LogOut, Flame } from 'lucide-react';
-import { ConnectionStatus } from '../utils/webrtc';
+import { ConnectionStatus } from '../utils/mqtt';
 
 interface HeaderProps {
   connectionStatus: ConnectionStatus;

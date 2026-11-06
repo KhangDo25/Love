@@ -4,8 +4,10 @@ Web app mobile-first bằng React + Vite + Tailwind dành riêng cho 2 người 
 
 ## ✨ Điểm nổi bật
 - **100% Web tĩnh**: Không dùng Firebase, không database, không backend riêng. Dễ dàng push lên GitHub và deploy lên Vercel chỉ với 1 click (`npm run build`, output: `dist`).
-- **Kết nối Peer-to-Peer (WebRTC)**: Sử dụng thư viện `PeerJS` với server signaling công cộng miễn phí. Mã phòng 4 số ngẫu nhiên dạng `tycct-XXXX`.
-- **Phòng riêng tư cho 2 người**: Tối đa 2 người; nếu người thứ 3 vào sẽ tự động từ chối.
+- **Kết nối siêu tốc bằng MQTT over WebSocket**: Sử dụng thư viện `mqtt.js` qua giao thức WebSocket bảo mật (WSS). Không lo bị chặn mạng bởi NAT/tường lửa 4G như WebRTC.
+- **Hệ thống Broker dự phòng thông minh (Fallback)**: Tự động thử kết nối lần lượt qua 3 broker công cộng uy tín (HiveMQ, EMQX, Mosquitto) với timeout 6 giây.
+- **Phòng riêng tư cho 2 người**: Tiền tố topic bí mật `tycct-9f3a7/{mã-phòng}`. Tối đa 2 người; nếu người thứ 3 vào sẽ nhận thông báo *"Phòng đã đủ 2 người 💕"*.
+- **Cơ chế Presence & Last Will**: Host đăng ký presence dạng retained, tự động hủy qua Last Will khi mất mạng đột ngột. Guest xác thực phòng có host trước khi vào.
 - **Link mời tức thì**: Dạng `https://your-domain.vercel.app/?room=1234`, người yêu chỉ cần chạm là vào thẳng phòng.
 - **Tự động lưu & phục hồi**: Lưu hồ sơ, tin nhắn, sổ tay, điểm số ở `localStorage` của từng máy; khi kết nối lại sẽ tự động hợp nhất (merge) không làm mất dữ liệu.
 - **Bói tình yêu định mệnh 💘**: Thuật toán cố định từ Cung hoàng đạo + Con giáp + Thần số học số chủ đạo, ra cùng % và lời bình cho cả 2 máy. Chụp ảnh kết quả lưu về máy với 1 chạm.
@@ -15,20 +17,23 @@ Web app mobile-first bằng React + Vite + Tailwind dành riêng cho 2 người 
 
 ---
 
-## 🌐 Ghi chú quan trọng về kết nối WebRTC (4G / WiFi)
+## 🌐 Kiến trúc kết nối MQTT over WebSocket
 
-WebRTC là công nghệ kết nối trực tiếp ngang hàng (Peer-to-Peer) giữa 2 trình duyệt mà không cần máy chủ trung gian lưu trữ dữ liệu.
+### Danh sách Broker công cộng (Tự động chuyển tiếp nếu lỗi):
+1. `wss://broker.hivemq.com:8884/mqtt`
+2. `wss://broker.emqx.io:8084/mqtt`
+3. `wss://test.mosquitto.org:8081`
 
-### Khắc phục sự cố kết nối:
-1. **Tường lửa mạng (Symmetric NAT)**:
-   - Một số mạng 4G/5G hoặc mạng WiFi công ty / trường học có cấu hình tường lửa đặc biệt chặn lưu lượng P2P giữa 2 thiết bị.
-   - **Cách xử lý nhanh**: Nếu bị kẹt ở trạng thái *"Đang kết nối lại..."*, hãy thử một trong các cách sau:
-     - Cả 2 cùng kết nối chung một mạng WiFi gia đình.
-     - Hoặc một bên mở Điểm phát sóng di động (Hotspot) cho bên kia kết nối.
-     - Hoặc một trong 2 người chuyển từ 4G sang WiFi (hoặc ngược lại).
-2. **Cấu hình thêm TURN Server miễn phí (Tùy chọn)**:
-   - Mặc định ứng dụng sử dụng các máy chủ Google STUN công cộng (`stun:stun.l.google.com:19302`).
-   - Nếu bạn muốn kết nối xuyên qua 100% mọi loại tường lửa 4G ngặt nghèo nhất, bạn có thể đăng ký tài khoản miễn phí tại **Metered.ca** hoặc **Xirsys** để lấy thông tin TURN server (username, credential) và bổ sung vào mảng `ICE_SERVERS` trong file `src/utils/webrtc.ts`.
+### Quy ước Topic:
+- `tycct-9f3a7/{mã-phòng}/presence`: Báo hiệu trạng thái phòng (retained message)
+- `tycct-9f3a7/{mã-phòng}/host`: Kênh lắng nghe của Host (Guest gửi yêu cầu lên đây)
+- `tycct-9f3a7/{mã-phòng}/guest`: Kênh lắng nghe của Guest (Host gửi phản hồi và đồng bộ lên đây)
+
+### Heartbeat & Chống trùng lặp (Deduplication):
+- Gửi nhịp tim (Heartbeat ping/pong) định kỳ mỗi 5 giây.
+- Nếu quá 15 giây không nhận được tín hiệu từ đối phương, app hiển thị trạng thái *"Người yêu đã mất kết nối. Đang thử nối lại... 🟡"*.
+- Khi kết nối lại, Host sẽ tự động re-sync toàn bộ trạng thái phòng.
+- Mọi gói tin đều có `seq` và `from` để lọc bỏ tin nhắn trùng lặp.
 
 ---
 

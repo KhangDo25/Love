@@ -150,5 +150,6 @@ export type P2PMessage =
   | { type: 'COURT_ADD_CASE'; payload: CoupleCourtCase }
   | { type: 'COURT_VOTE'; payload: { caseId: string; verdict: 'guilty' | 'innocent'; penalty: string } }
   | { type: 'REJECT_ROOM_FULL'; payload: { reason: string } }
+  | { type: 'FULL'; payload: { reason: string } }
   | { type: 'PING' }
   | { type: 'PONG' };

@@ -28,7 +28,7 @@ import {
   getDefaultGameState,
   mergeGameStates,
 } from './utils/storage';
-import { P2PManager, ConnectionStatus } from './utils/webrtc';
+import { MQTTManager, ConnectionStatus } from './utils/mqtt';
 import { Header } from './components/Header';
 import { Lobby } from './components/Lobby';
 import { MainDashboard } from './components/MainDashboard';
@@ -67,8 +67,8 @@ export default function App() {
   const [showChatDrawer, setShowChatDrawer] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
-  // WebRTC Manager reference
-  const p2pRef = useRef<P2PManager | null>(null);
+  // MQTT Manager reference
+  const mqttRef = useRef<MQTTManager | null>(null);
   const gameStateRef = useRef<CoupleGameState>(gameState);
   gameStateRef.current = gameState;
 
@@ -400,11 +400,11 @@ export default function App() {
     }
   }, []);
 
-  // Initialize P2P manager
+  // Initialize MQTT manager
   useEffect(() => {
-    p2pRef.current = new P2PManager({
+    mqttRef.current = new MQTTManager({
       onStatusChange: (status) => {
-        console.log('[App] P2P status change:', status);
+        console.log('[App] MQTT status change:', status);
         setConnectionStatus(status);
         if (status === 'connected') {
           setErrorMessage(null);
@@ -417,7 +417,7 @@ export default function App() {
       onHandshakeComplete: (partnerProf, isHost, incomingState) => {
         console.log('[App] Handshake complete! isHost:', isHost, 'Partner:', partnerProf.name);
         setPartnerProfile(partnerProf);
-        const room = p2pRef.current?.getRoomCode() || '';
+        const room = mqttRef.current?.getRoomCode() || '';
         setCurrentRoomCode(room);
         saveLastRoomCode(room);
         setLastRoomCode(room);
@@ -447,11 +447,11 @@ export default function App() {
         });
       },
       onPartnerDisconnected: () => {
-        console.warn('[App] Partner disconnected! Attempting reconnect...');
+        console.warn('[App] Partner disconnected! Heartbeat timeout > 15s');
       },
       onMessage: handleP2PMessage,
       onError: (err) => {
-        console.error('[App] P2P Error:', err);
+        console.error('[App] MQTT Error:', err);
         setErrorMessage(err);
       },
       getCurrentState: () => gameStateRef.current,
@@ -463,31 +463,31 @@ export default function App() {
     const roomParam = urlParams.get('room');
     if (roomParam && roomParam.length === 4) {
       console.log('[App] Auto-joining room from URL query param:', roomParam);
-      p2pRef.current.joinRoom(roomParam, myProfileRef.current);
+      mqttRef.current.joinRoom(roomParam, myProfileRef.current);
     }
 
     return () => {
-      p2pRef.current?.disconnect();
+      mqttRef.current?.disconnect();
     };
   }, [handleP2PMessage]);
 
   // Host creates room
   const handleCreateRoom = () => {
-    if (!p2pRef.current) return;
+    if (!mqttRef.current) return;
     setErrorMessage(null);
-    p2pRef.current.createRoom();
+    mqttRef.current.createRoom();
   };
 
   // Guest joins room (only moves to room once handshake completes!)
   const handleJoinRoom = (code: string) => {
-    if (!p2pRef.current) return;
+    if (!mqttRef.current) return;
     setErrorMessage(null);
-    p2pRef.current.joinRoom(code, myProfileRef.current);
+    mqttRef.current.joinRoom(code, myProfileRef.current);
   };
 
   // Cancel waiting room / join attempt
   const handleCancelWait = () => {
-    p2pRef.current?.disconnect();
+    mqttRef.current?.disconnect();
     setWaitingCode('');
     setCurrentRoomCode(null);
     setErrorMessage(null);
@@ -495,7 +495,7 @@ export default function App() {
 
   // Leave room
   const handleLeaveRoom = () => {
-    p2pRef.current?.disconnect();
+    mqttRef.current?.disconnect();
     setCurrentRoomCode(null);
     setWaitingCode('');
     setErrorMessage(null);
@@ -507,12 +507,12 @@ export default function App() {
     setMyProfile(updated);
     saveProfile(updated);
 
-    // Send profile update to partner over DataChannel
-    if (p2pRef.current?.isConnected()) {
-      p2pRef.current.send({
+    // Send profile update to partner over MQTT
+    if (mqttRef.current?.isConnected()) {
+      mqttRef.current.send({
         type: 'UPDATE_PROFILE',
         payload: {
-          role: p2pRef.current.getIsHost() ? 'host' : 'guest',
+          role: mqttRef.current.getIsHost() ? 'host' : 'guest',
           profile: updated,
         },
       });
@@ -542,7 +542,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'ADD_CHAT_MESSAGE',
       payload: newMsg,
     });
@@ -559,7 +559,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'ADD_LOVE_POINTS',
       payload: { points: pts, reason },
     });
@@ -567,7 +567,7 @@ export default function App() {
 
   // Quiz methods
   const handleQuizSubmitAnswer = (index: number, answer: string) => {
-    const role = p2pRef.current?.getIsHost() ? 'host' : 'guest';
+    const role = mqttRef.current?.getIsHost() ? 'host' : 'guest';
     setGameState((prev) => {
       const hostAnswers = { ...prev.understandingQuiz.hostAnswers };
       const guestAnswers = { ...prev.understandingQuiz.guestAnswers };
@@ -582,7 +582,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'QUIZ_SUBMIT_ANSWER',
       payload: { role, questionIndex: index, answer },
     });
@@ -598,7 +598,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'QUIZ_NEXT_QUESTION',
       payload: index,
     });
@@ -620,12 +620,12 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({ type: 'QUIZ_RESTART' });
+    mqttRef.current?.send({ type: 'QUIZ_RESTART' });
   };
 
   // Quick QA methods
   const handleQASubmitAnswer = (answer: string) => {
-    const role = p2pRef.current?.getIsHost() ? 'host' : 'guest';
+    const role = mqttRef.current?.getIsHost() ? 'host' : 'guest';
     setGameState((prev) => {
       const hostAnswer = role === 'host' ? answer : prev.quickQA.hostAnswer;
       const guestAnswer = role === 'guest' ? answer : prev.quickQA.guestAnswer;
@@ -639,7 +639,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'QUICK_QA_ANSWER',
       payload: { role, answer },
     });
@@ -660,7 +660,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'QUICK_QA_NEXT',
       payload: index,
     });
@@ -674,7 +674,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'UPDATE_BUCKET_LIST',
       payload: updated,
     });
@@ -688,7 +688,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'ADD_LETTER',
       payload: letter,
     });
@@ -705,7 +705,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'MARK_LETTER_READ',
       payload: { letterId },
     });
@@ -719,7 +719,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'ADD_DIARY',
       payload: entry,
     });
@@ -734,7 +734,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'UPDATE_LIKES_DISLIKES',
       payload: updated,
     });
@@ -742,7 +742,7 @@ export default function App() {
 
   // RPS methods
   const handleRPSMove = (choice: 'rock' | 'paper' | 'scissors') => {
-    const role = p2pRef.current?.getIsHost() ? 'host' : 'guest';
+    const role = mqttRef.current?.getIsHost() ? 'host' : 'guest';
     setGameState((prev) => {
       const nextRps = {
         ...prev.rps,
@@ -780,7 +780,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'RPS_MOVE',
       payload: { role, choice },
     });
@@ -802,7 +802,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'RPS_RESET',
       payload: { penalty },
     });
@@ -816,7 +816,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'SPIN_WHEEL',
       payload: state,
     });
@@ -833,7 +833,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'DRAW_STROKE',
       payload: stroke,
     });
@@ -846,7 +846,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({ type: 'CLEAR_CANVAS' });
+    mqttRef.current?.send({ type: 'CLEAR_CANVAS' });
   };
 
   // Court methods
@@ -857,7 +857,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'COURT_ADD_CASE',
       payload: newCase,
     });
@@ -879,7 +879,7 @@ export default function App() {
       return next;
     });
 
-    p2pRef.current?.send({
+    mqttRef.current?.send({
       type: 'COURT_VOTE',
       payload: { caseId, verdict, penalty },
     });

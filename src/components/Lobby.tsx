@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Copy, Check, Sparkles, HeartHandshake, AlertCircle, RefreshCw, Loader2, ArrowLeft } from 'lucide-react';
 import { UserProfile } from '../types/game';
-import { ConnectionStatus } from '../utils/webrtc';
+import { ConnectionStatus } from '../utils/mqtt';
 
 interface LobbyProps {
   waitingCode: string;
@@ -296,10 +296,9 @@ export const Lobby: React.FC<LobbyProps> = ({
           </button>
           {showNetworkTip && (
             <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 text-left space-y-1">
-              <p className="font-bold text-slate-700">Lưu ý khi chơi qua mạng khác nhau:</p>
-              <p>• WebRTC kết nối ngang hàng P2P trực tiếp giữa 2 máy.</p>
-              <p>• Hệ thống đã tích hợp STUN/TURN dự phòng để xuyên tường lửa 4G.</p>
-              <p>• Nếu mạng 4G/WiFi vẫn chặn, hãy thử đổi cả 2 sang 4G hoặc cùng bắt 1 mạng WiFi nhé!</p>
+              <p className="font-bold text-slate-700">Mạng kết nối MQTT over WebSocket:</p>
+              <p>• Dữ liệu truyền qua WebSocket bảo mật (WSS), không lo bị chặn NAT như WebRTC.</p>
+              <p>• Tự động dự phòng 3 broker công cộng (HiveMQ, EMQX, Mosquitto) và tự kết nối lại nếu mạng chập chờn.</p>
             </div>
           )}
         </div>

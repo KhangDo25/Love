@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Heart, Sparkles, Flame, BookOpen, Users, Wand2, MessageCircle } from 'lucide-react';
 import { UserProfile } from '../types/game';
-import { ConnectionStatus } from '../utils/webrtc';
+import { ConnectionStatus } from '../utils/mqtt';
 
 interface MainDashboardProps {
   myProfile: UserProfile;
